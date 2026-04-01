@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# arma-prompt setup — register skills with Claude Code
+set -e
+
+ARMA_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_SKILLS_DIR="$(dirname "$ARMA_DIR")"
+SKILLS_BASENAME="$(basename "$INSTALL_SKILLS_DIR")"
+
+# 1. Check Python
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Error: python3 is required but not installed." >&2
+  exit 1
+fi
+
+# 2. Check pyyaml
+if ! python3 -c "import yaml" 2>/dev/null; then
+  echo "Installing pyyaml..."
+  pip3 install pyyaml -q
+fi
+
+# 3. Create global state directory
+mkdir -p "$HOME/.arma/projects"
+
+# 4. Link skills into Claude Code's skills directory
+if [ "$SKILLS_BASENAME" = "skills" ]; then
+  linked=()
+  for skill_dir in "$ARMA_DIR"/*/; do
+    if [ -f "$skill_dir/SKILL.md" ]; then
+      dir_name="$(basename "$skill_dir")"
+      [ "$dir_name" = "node_modules" ] && continue
+      [ "$dir_name" = "lib" ] && continue
+      [ "$dir_name" = "bin" ] && continue
+      [ "$dir_name" = "templates" ] && continue
+
+      # Read skill name from frontmatter
+      skill_name=$(grep -m1 '^name:' "$skill_dir/SKILL.md" 2>/dev/null | sed 's/^name:[[:space:]]*//' | tr -d '[:space:]')
+      [ -z "$skill_name" ] && skill_name="$dir_name"
+      target="$INSTALL_SKILLS_DIR/$skill_name"
+
+      if [ -L "$target" ] || [ ! -e "$target" ]; then
+        ln -snf "arma-prompt/$dir_name" "$target"
+        linked+=("$skill_name")
+      fi
+    fi
+  done
+
+  # Link root skill
+  if [ -f "$ARMA_DIR/SKILL.md" ]; then
+    target="$INSTALL_SKILLS_DIR/arma"
+    if [ -L "$target" ] || [ ! -e "$target" ]; then
+      ln -snf "arma-prompt" "$target"
+    fi
+  fi
+
+  if [ ${#linked[@]} -gt 0 ]; then
+    echo "  linked skills: ${linked[*]}"
+  fi
+fi
+
+echo "arma-prompt ready."
+echo "  skills: $INSTALL_SKILLS_DIR"
+echo "  Run /arma-init in any repo to start optimizing prompts."

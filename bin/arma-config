@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# arma-config — read/write ~/.arma/config.yaml
+# Usage:
+#   arma-config get <key>
+#   arma-config set <key> <value>
+#   arma-config list
+set -e
+
+CONFIG_DIR="$HOME/.arma"
+CONFIG_FILE="$CONFIG_DIR/config.yaml"
+
+_ensure_config() {
+  mkdir -p "$CONFIG_DIR"
+  [ -f "$CONFIG_FILE" ] || touch "$CONFIG_FILE"
+}
+
+_validate_key() {
+  case "$1" in
+    *[!a-zA-Z0-9_]*) echo "Invalid key: $1 (alphanumeric + underscore only)" >&2; exit 1 ;;
+  esac
+}
+
+case "${1:-}" in
+  get)
+    [ -z "${2:-}" ] && echo "Usage: arma-config get <key>" >&2 && exit 1
+    _validate_key "$2"
+    _ensure_config
+    grep "^${2}:" "$CONFIG_FILE" 2>/dev/null | sed "s/^${2}:[[:space:]]*//" | head -1
+    ;;
+  set)
+    [ -z "${2:-}" ] || [ -z "${3:-}" ] && echo "Usage: arma-config set <key> <value>" >&2 && exit 1
+    _validate_key "$2"
+    _ensure_config
+    # Escape sed special chars in value
+    _escaped_val=$(printf '%s\n' "$3" | sed 's/[&/\]/\\&/g')
+    if grep -q "^${2}:" "$CONFIG_FILE" 2>/dev/null; then
+      _tmpfile=$(mktemp)
+      sed "s/^${2}:.*/${2}: ${_escaped_val}/" "$CONFIG_FILE" > "$_tmpfile"
+      mv "$_tmpfile" "$CONFIG_FILE"
+    else
+      echo "${2}: ${3}" >> "$CONFIG_FILE"
+    fi
+    ;;
+  list)
+    _ensure_config
+    cat "$CONFIG_FILE"
+    ;;
+  *)
+    echo "Usage: arma-config {get|set|list} [key] [value]" >&2
+    exit 1
+    ;;
+esac

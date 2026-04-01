@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# arma-slug — derive project slug from git remote
+# Outputs: SLUG=owner-repo (sanitized)
+set -e
+
+_remote=$(git remote get-url origin 2>/dev/null || echo "local")
+# Extract owner/repo from various URL formats
+_slug=$(echo "$_remote" | sed -E 's|.*[:/]([^/]+/[^/]+)(\.git)?$|\1|' | tr '/' '-')
+# Sanitize to safe chars only
+_slug=$(printf '%s' "${_slug:-local}" | tr -cd 'a-zA-Z0-9._-')
+
+echo "SLUG=${_slug}"
